@@ -13,7 +13,8 @@ The sample compares two engines on two devices, with Graviton as the common poin
 - **vLLM** serving the native bf16 checkpoint on Graviton and on GPU.
 
 It ships the cluster definition, one values file per cell, the inference-perf
-configs, and the helper scripts. It contains no results; run it to produce your own.
+configs, and the helper scripts. Reference numbers from one run are in
+[RESULTS.md](RESULTS.md); run the sample to produce your own.
 
 ## Test Matrix
 
@@ -69,6 +70,7 @@ you need an exactly repeatable run.
 ```
 graviton-vs-gpu-eks-inference-charts/
 ├── README.md
+├── RESULTS.md                        # reference numbers from one run
 ├── cluster.yaml                      # eksctl cluster (render with envsubst)
 ├── values/                           # one inference-charts values file per cell
 │   ├── llamacpp-graviton-{q4-k-m,q8-0,bf16}.yaml
