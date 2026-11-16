@@ -11,7 +11,7 @@ inference:
   modelServer:
     image:
       repository: public.ecr.aws/deep-learning-containers/vllm
-      tag: server-cuda-v2
+      tag: server-cuda-v2.8.1
     deployment:
       startupProbe: {failureThreshold: 120, periodSeconds: 10, httpGet: {path: /health, port: 8000}}
       tolerations: [{key: bench, operator: Equal, value: gpu, effect: NoSchedule}]

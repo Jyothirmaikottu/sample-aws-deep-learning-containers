@@ -12,7 +12,7 @@ inference:
   modelServer:
     image:
       repository: public.ecr.aws/deep-learning-containers/vllm-arm64
-      tag: server-cpu-v1
+      tag: server-cpu-v1.1.0
     deployment:
       startupProbe: {failureThreshold: 120, periodSeconds: 10, httpGet: {path: /health, port: 8000}}
       tolerations: [{key: bench, operator: Equal, value: graviton, effect: NoSchedule}]

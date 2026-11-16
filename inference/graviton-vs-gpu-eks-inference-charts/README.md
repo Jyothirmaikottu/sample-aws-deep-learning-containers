@@ -28,15 +28,14 @@ streaming completions. The inference-perf client runs on a separate untainted `s
 node (`m7i.xlarge`) so it never shares CPU with the server, and only one engine runs on
 each bench node at a time.
 
-**llama.cpp request slots.** The llama.cpp values files do not set `--parallel`, so
-`llama-server` runs its default of 4 slots (`n_slots = 4` in the server log). For llama.cpp
-cells, stages above concurrency 4 therefore measure queueing in `llama-server`, not larger
-batches. To benchmark batched llama.cpp with N slots, add `--parallel N` and raise
-`--ctx-size` so the context fits N concurrent 512 + 128 token requests with headroom, for
-example `--parallel 8 --ctx-size 8192`:
+**llama.cpp request slots.** The llama.cpp values files set `--parallel 8` with
+`--ctx-size 8192`, so `llama-server` runs 8 slots of 1024 tokens each, enough for one
+512 + 128 token request per slot. Without `--parallel`, `llama-server` defaults to 4 slots.
+Above concurrency 8, llama.cpp stages measure queueing in `llama-server`, not larger
+batches. To change the slot count, keep `ctx-size / parallel` above 640:
 
-- Graviton values files: add `parallel: "8"` and set `ctxSize: "8192"` under `modelParameters`.
-- GPU values files: add `--parallel 8 --ctx-size 8192` to `llamaCpp.command`, before the
+- Graviton values files: `parallel` and `ctxSize` under `modelParameters`.
+- GPU values files: `--parallel` and `--ctx-size` in `llamaCpp.command`, before the
   trailing `#`.
 
 ## Images
@@ -46,13 +45,13 @@ registry login.
 
 | Cell | Image |
 |---|---|
-| llama.cpp Graviton | `public.ecr.aws/deep-learning-containers/llama-cpp-arm64:server-cpu-v1` |
-| llama.cpp GPU | `public.ecr.aws/deep-learning-containers/llama-cpp:server-cuda-v1` |
-| vLLM Graviton | `public.ecr.aws/deep-learning-containers/vllm-arm64:server-cpu-v1` |
-| vLLM GPU | `public.ecr.aws/deep-learning-containers/vllm:server-cuda-v2` |
+| llama.cpp Graviton | `public.ecr.aws/deep-learning-containers/llama-cpp-arm64:server-cpu-v1.0.6` |
+| llama.cpp GPU | `public.ecr.aws/deep-learning-containers/llama-cpp:server-cuda-v1.0.6` |
+| vLLM Graviton | `public.ecr.aws/deep-learning-containers/vllm-arm64:server-cpu-v1.1.0` |
+| vLLM GPU | `public.ecr.aws/deep-learning-containers/vllm:server-cuda-v2.8.1` |
 
-The tags are floating major-version tags. Pin a full version tag in the values files if
-you need an exactly repeatable run.
+The values files pin full version tags so runs are repeatable. Floating major-version
+tags (for example `server-cpu-v1`) also exist if you want the latest patch.
 
 ## Prerequisites
 
@@ -180,14 +179,17 @@ name:
 
 ### vLLM cells
 
-The vLLM values files set the bench-node toleration and a startup probe, so a rollout
-wait is enough:
+The vLLM values files set the bench-node toleration and a startup probe. The GPU image is
+about 10 GB, and on a fresh node the pull can outlast the Deployment's 10 minute progress
+deadline, so `rollout status` may fail while the pod is still starting. Poll `/health`
+before benchmarking:
 
 ```bash
 SVC=vllm-gpu-bf16 MODEL=Qwen/Qwen3-8B VALUES=values/vllm-gpu-bf16.yaml BENCH=bench/gpu-concurrent.yaml
 # Graviton: SVC=vllm-grv-bf16 MODEL=Qwen/Qwen3-8B VALUES=values/vllm-graviton-bf16.yaml BENCH=bench/cpu-concurrent.yaml
 helm install "$SVC" "$CHARTS_DIR/charts/inference-charts" -n benchmarking -f "$VALUES"
 kubectl -n benchmarking rollout status "deploy/$SVC" --timeout=30m
+until kubectl -n benchmarking exec curlpod -- curl -sf "http://$SVC:8000/health"; do sleep 15; done; echo
 ```
 
 ### llama.cpp cells
