@@ -21,6 +21,29 @@ Metrics:
 - **Output TPS:** total output tokens over run time, prefill included.
 - **TTFT and ITL:** p50 from inference-perf. Per-user t/s is 1/ITL.
 
+## Conclusion
+
+Graviton4 serves Qwen3-8B on standard EKS nodes with no GPU, using the same Helm charts and
+the same OpenAI-compatible API as the GPU setup. Moving a workload between Graviton and GPU
+is a values-file change.
+
+- **Quantized llama.cpp is the way to run on Graviton.** Q4_K_M decodes at 31.3 t/s and Q8_0
+  at 26.9 t/s for one user, which is faster than reading speed and works well for assistants,
+  agents, tool calls, and internal apps.
+- **Graviton is the lower-cost node for steady, moderate traffic.** `m8g.4xlarge` costs
+  $0.718/hr (about $524/month) vs $1.861/hr (about $1,359/month) for `g6e.xlarge`, 2.6x
+  less per hour. A Graviton node handles up to about 20 output TPS (llama.cpp Q8_0), about 9
+  requests per minute at 128 output tokens. Any workload within that range costs less on
+  Graviton, because an always-on node is billed by the hour whether or not it is busy.
+- **No GPU capacity or quota needed.** Graviton instances are general purpose and widely
+  available, so the model can run in Regions or accounts where GPU capacity is limited.
+- **Scale out for more traffic.** Throughput per Graviton node levels off at about 4
+  requests in flight, so add nodes behind the same Service to serve more traffic. For high
+  concurrency on a single node, vLLM on GPU batches more requests at once (1,281 TPS on one
+  L40S).
+- **Best fit: short to medium prompts.** A 512-token prompt takes 4.6 to 6.4 s before the
+  first token on Graviton, so long-context RAG prompts are better served on GPU.
+
 ## Summary
 
 | Engine | Device | Precision | Decode, 1 user (t/s) | TTFT, 1 user (s) | Peak output TPS (concurrency) | Peak memory |
@@ -166,4 +189,6 @@ vLLM L40S BF16, Poisson rate sweep
 
 - vLLM with GGUF weights. vLLM moved GGUF support to `vllm-gguf-plugin`, which the DLC
   images used here do not include.
-- vLLM W8A8 on Graviton, the closer 8-bit comparison against llama.cpp Q8_0.
+- vLLM W8A8 on Graviton, the closer 8-bit comparison against llama.cpp Q8_0. vLLM reports
+  large INT8 speedups over BF16 on Arm CPUs, so this is the most likely next gain on Graviton.
+- An x86 CPU node (for example `m7i.4xlarge`) as a CPU-to-CPU baseline.
